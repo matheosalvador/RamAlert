@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RamDeals - RAM Pricing AI Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700">
+        <h1 class="text-2xl font-bold text-center mb-2 text-indigo-400">🤖 RAM Price Analyzer</h1>
+        <p class="text-slate-400 text-sm text-center mb-6">Artificial intelligence at the service of your components.</p>
+
+        <form id="ramForm" class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Capacity (GB)</label>
+                <input type="number" id="capacity" required placeholder="Ex: 16, 32, 64" 
+                       class="w-full bg-slate-700 border border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-white">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Frequency (MHz)</label>
+                <input type="number" id="frequency" required placeholder="Ex: 3200, 5200, 6000" 
+                       class="w-full bg-slate-700 border border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-white">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Generation</label>
+                <select id="generation" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-white">
+                    <option value="DDR4">DDR4</option>
+                    <option value="DDR5">DDR5</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Ad price ($)</label>
+                <input type="number" id="price" step="0.01" required placeholder="Ex: 45.00" 
+                       class="w-full bg-slate-700 border border-slate-600 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-white">
+            </div>
+
+            <button type="submit" 
+                    class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg p-3 transition duration-200 shadow-lg shadow-indigo-600/30">
+                Analyze the offer
+            </button>
+        </form>
+
+        <div id="loader" class="hidden text-center py-6">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+            <p class="text-xs text-slate-400 mt-2">The AI is analyzing the market...</p>
+        </div>
+
+        <div id="resultCard" class="hidden mt-6 p-5 rounded-xl border">
+            <h3 id="verdict" class="text-lg font-bold text-center mb-3"></h3>
+            <div class="space-y-2 text-sm text-slate-300">
+                <div class="flex justify-between border-b border-slate-700/50 pb-1.5">
+                    <span>Estimated Price (IA) :</span>
+                    <span id="aiPrice" class="font-semibold text-white"></span>
+                </div>
+                <div class="flex justify-between border-b border-slate-700/50 pb-1.5">
+                    <span>Ad Price :</span>
+                    <span id="sellerPrice" class="font-semibold text-white"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Price Difference :</span>
+                    <span id="diffPrice" class="font-semibold"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('ramForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const loader = document.getElementById('loader');
+            const resultCard = document.getElementById('resultCard');
+            
+            loader.classList.remove('hidden');
+            resultCard.classList.add('hidden');
+
+            // Préparation des données avec la clé 'generation' en texte
+            const data = {
+                capacity_gb: parseInt(document.getElementById('capacity').value),
+                frequency_mhz: parseInt(document.getElementById('frequency').value),
+                generation: document.getElementById('generation').value, // <- Changement ici (envoi de "DDR4" ou "DDR5")
+                prix_vendeur: parseFloat(document.getElementById('price').value)
+            };
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/analyser-ram', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) throw new Error('Erreur API');
+
+                const result = await response.json();
+
+                document.getElementById('verdict').innerText = result.verdict;
+                document.getElementById('aiPrice').innerText = `${result.prix_estime_ia.toFixed(2)} $`;
+                document.getElementById('sellerPrice').innerText = `${result.prix_vendeur_fourni.toFixed(2)} $`;
+                
+                const diffSpan = document.getElementById('diffPrice');
+                diffSpan.innerText = `${result.ecart_pourcentage}%`;
+
+                resultCard.className = "mt-6 p-5 rounded-xl border"; 
+                if (result.couleur === "green") {
+                    resultCard.classList.add('bg-emerald-950/40', 'border-emerald-500/50');
+                    diffSpan.className = "font-semibold text-emerald-400";
+                } else if (result.couleur === "red") {
+                    resultCard.classList.add('bg-rose-950/40', 'border-rose-500/50');
+                    diffSpan.className = "font-semibold text-rose-400";
+                } else {
+                    resultCard.classList.add('bg-blue-950/40', 'border-blue-500/50'); // Fix couleur "blue" renvoyée par FastAPI
+                    diffSpan.className = "font-semibold text-blue-400";
+                }
+
+                loader.classList.add('hidden');
+                resultCard.classList.remove('hidden');
+
+            } catch (error) {
+                loader.classList.add('hidden');
+                alert("Impossible de contacter l'API. Vérifie que ton serveur FastAPI est bien démarré !");
+            }
+        });
+    </script>
+</body>
+</html>
